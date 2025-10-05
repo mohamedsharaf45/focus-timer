@@ -6,12 +6,12 @@
     <title>Focus Timer</title>
     
     <!-- Google Analytics -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-TR8Y6PDBKH"></script>
     <script>
         window.dataLayer = window.dataLayer || [];
         function gtag(){dataLayer.push(arguments);}
         gtag('js', new Date());
-        gtag('config', 'G-XXXXXXXXXX');
+        gtag('config', 'G-TR8Y6PDBKH');
     </script>
     
     <style>
@@ -207,6 +207,58 @@
             font-size: 0.9em;
             margin-top: 5px;
         }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: white;
+            padding: 20px 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            display: none;
+            z-index: 1000;
+            min-width: 300px;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        .notification.show {
+            display: block;
+        }
+
+        .notification.break-mode {
+            border-left: 5px solid #10b981;
+        }
+
+        .notification.focus-mode {
+            border-left: 5px solid #667eea;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .notification h2 {
+            margin: 0 0 10px 0;
+            font-size: 1.5em;
+        }
+
+        .notification p {
+            margin: 0;
+            color: #666;
+        }
+
+        .notification button {
+            margin-top: 15px;
+            width: 100%;
+        }
     </style>
 </head>
 <body>
@@ -251,6 +303,12 @@
         </div>
     </div>
 
+    <div class="notification" id="notification">
+        <h2 id="notificationTitle">🎉 Great Job!</h2>
+        <p id="notificationMessage">Time for a break!</p>
+        <button onclick="acknowledgeNotification()">Got it!</button>
+    </div>
+
     <script>
         let timer = null;
         let timeLeft = 25 * 60;
@@ -261,6 +319,7 @@
         let totalMinutesStudied = 0;
         let alertSound = null;
         let alertInterval = null;
+        let audioContext = null;
 
         const timerDisplay = document.getElementById('timerDisplay');
         const startBtn = document.getElementById('startBtn');
@@ -273,6 +332,16 @@
         const progressFill = document.getElementById('progressFill');
         const sessionsCompletedEl = document.getElementById('sessionsCompleted');
         const totalTimeEl = document.getElementById('totalTime');
+        const notification = document.getElementById('notification');
+        const notificationTitle = document.getElementById('notificationTitle');
+        const notificationMessage = document.getElementById('notificationMessage');
+
+        // Initialize audio context on first user interaction
+        function initAudio() {
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
 
         function updateDisplay() {
             const minutes = Math.floor(timeLeft / 60);
@@ -285,11 +354,20 @@
 
         function startTimer() {
             if (!isRunning) {
+                initAudio(); // Initialize audio context on user interaction
                 isRunning = true;
                 startBtn.disabled = true;
                 pauseBtn.disabled = false;
                 focusTimeInput.disabled = true;
                 breakTimeInput.disabled = true;
+
+                // Track event in Google Analytics
+                if (typeof gtag !== 'undefined') {
+                    gtag('event', 'timer_started', {
+                        'event_category': 'Timer',
+                        'event_label': isFocusMode ? 'Focus' : 'Break'
+                    });
+                }
 
                 timer = setInterval(() => {
                     timeLeft--;
@@ -329,14 +407,22 @@
                 sessionsCompletedEl.textContent = sessionsCompleted;
                 totalTimeEl.textContent = totalMinutesStudied;
                 
+                // Track session completion
+                if (typeof gtag !== 'undefined') {
+                    gtag('event', 'session_completed', {
+                        'event_category': 'Timer',
+                        'value': sessionsCompleted
+                    });
+                }
+                
+                showNotification('🎉 Great Job!', 'Time for a break!', 'break-mode');
                 startContinuousAlert();
-                alert('🎉 Great job! Time for a break!');
                 
                 isFocusMode = false;
                 timeLeft = parseInt(breakTimeInput.value) * 60;
             } else {
+                showNotification('✨ Break Over!', 'Ready to focus again?', 'focus-mode');
                 startContinuousAlert();
-                alert('✨ Break over! Ready to focus again?');
                 
                 isFocusMode = true;
                 timeLeft = parseInt(focusTimeInput.value) * 60;
@@ -348,6 +434,17 @@
             
             focusTimeInput.disabled = false;
             breakTimeInput.disabled = false;
+        }
+
+        function showNotification(title, message, mode) {
+            notificationTitle.textContent = title;
+            notificationMessage.textContent = message;
+            notification.className = 'notification show ' + mode;
+        }
+
+        function acknowledgeNotification() {
+            notification.classList.remove('show');
+            stopAlert();
         }
 
         function startContinuousAlert() {
@@ -384,21 +481,28 @@
         }
 
         function playSound() {
-            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            const oscillator = audioContext.createOscillator();
-            const gainNode = audioContext.createGain();
+            if (!audioContext) {
+                initAudio();
+            }
             
-            oscillator.connect(gainNode);
-            gainNode.connect(audioContext.destination);
-            
-            oscillator.frequency.value = 800;
-            oscillator.type = 'sine';
-            
-            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
-            
-            oscillator.start(audioContext.currentTime);
-            oscillator.stop(audioContext.currentTime + 0.5);
+            try {
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                oscillator.frequency.value = 800;
+                oscillator.type = 'sine';
+                
+                gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+                
+                oscillator.start(audioContext.currentTime);
+                oscillator.stop(audioContext.currentTime + 0.5);
+            } catch (e) {
+                console.log('Audio play failed:', e);
+            }
         }
 
         focusTimeInput.addEventListener('change', () => {
