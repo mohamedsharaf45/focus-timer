@@ -320,6 +320,8 @@
         let alertSound = null;
         let alertInterval = null;
         let audioContext = null;
+        let startTime = null;
+        let pausedTime = 0;
 
         const timerDisplay = document.getElementById('timerDisplay');
         const startBtn = document.getElementById('startBtn');
@@ -369,14 +371,22 @@
                     });
                 }
 
+                // Store when timer actually started
+                startTime = Date.now() - pausedTime;
+
                 timer = setInterval(() => {
-                    timeLeft--;
-                    updateDisplay();
+                    // Calculate actual time passed based on real time, not setInterval
+                    const actualElapsed = Math.floor((Date.now() - startTime) / 1000);
+                    timeLeft = totalTime - actualElapsed;
 
                     if (timeLeft <= 0) {
+                        timeLeft = 0;
+                        updateDisplay();
                         completeSession();
+                    } else {
+                        updateDisplay();
                     }
-                }, 1000);
+                }, 100); // Check every 100ms for more accuracy
             }
         }
 
@@ -385,6 +395,11 @@
             clearInterval(timer);
             startBtn.disabled = false;
             pauseBtn.disabled = true;
+            
+            // Store how much time has passed when paused
+            if (startTime) {
+                pausedTime = Date.now() - startTime;
+            }
         }
 
         function resetTimer() {
@@ -392,6 +407,8 @@
             isFocusMode = true;
             timeLeft = parseInt(focusTimeInput.value) * 60;
             totalTime = timeLeft;
+            startTime = null;
+            pausedTime = 0;
             updateDisplay();
             updateModeIndicator();
             focusTimeInput.disabled = false;
@@ -429,6 +446,8 @@
             }
             
             totalTime = timeLeft;
+            startTime = null;
+            pausedTime = 0;
             updateDisplay();
             updateModeIndicator();
             
